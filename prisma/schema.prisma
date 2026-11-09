@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum ResidentStatus {
+  APPLICANT
+  OFFERED
+  ACTIVE
+  ALUMNI
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  INTERVIEW
+  OFFERED
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum RoomType {
+  SINGLE
+  DOUBLE
+  TWIN
+}
+
+enum ChargeType {
+  DEPOSIT
+  TERM_FEES
+  MEAL_PLAN
+  EXTRA
+  OTHER
+}
+
+enum MaintenanceStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum MaintenanceCategory {
+  PLUMBING
+  ELECTRICAL
+  FURNITURE
+  CLEANING
+  HVAC
+  OTHER
+}
+
+enum AnnouncementAudience {
+  ALL
+  STUDENTS
+  STAFF
+}
+
+model User {
+  id           String           @id @default(cuid())
+  email        String           @unique
+  passwordHash String
+  role         Role             @default(STUDENT)
+  name         String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  resident     ResidentProfile?
+}
+
+model ResidentProfile {
+  id               String          @id @default(cuid())
+  userId           String          @unique
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentId        String?
+  phone            String?
+  dateOfBirth      DateTime?
+  university       String?
+  course           String?
+  emergencyName    String?
+  emergencyPhone   String?
+  status           ResidentStatus  @default(APPLICANT)
+  mealPlanId       String?
+  mealPlan         MealPlan?       @relation(fields: [mealPlanId], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  applications     Application[]
+  allocations      Allocation[]
+  charges          Charge[]
+  payments         Payment[]
+  maintenance      MaintenanceRequest[]
+}
+
+model Application {
+  id          String            @id @default(cuid())
+  residentId  String
+  resident    ResidentProfile   @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  academicYear String
+  term        String            @default("Full Year")
+  status      ApplicationStatus @default(SUBMITTED)
+  preferredRoomType RoomType?
+  notes       String?
+  staffNotes  String?
+  interviewAt DateTime?
+  offeredAt   DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model Building {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  floors    Int      @default(1)
+  createdAt DateTime @default(now())
+  rooms     Room[]
+}
+
+model Room {
+  id         String   @id @default(cuid())
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  number     String
+  floor      Int      @default(1)
+  roomType   RoomType @default(SINGLE)
+  capacity   Int      @default(1)
+  createdAt  DateTime @default(now())
+  beds       Bed[]
+  maintenance MaintenanceRequest[]
+
+  @@unique([buildingId, number])
+}
+
+model Bed {
+  id          String       @id @default(cuid())
+  roomId      String
+  room        Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  label       String       @default("A")
+  allocations Allocation[]
+
+  @@unique([roomId, label])
+}
+
+model Allocation {
+  id         String          @id @default(cuid())
+  residentId String
+  resident   ResidentProfile @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  bedId      String
+  bed        Bed             @relation(fields: [bedId], references: [id], onDelete: Cascade)
+  term       String
+  checkIn    DateTime
+  checkOut   DateTime?
+  active     Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+model FeePlan {
+  id          String   @id @default(cuid())
+  name        String
+  academicYear String
+  termFee     Decimal  @db.Decimal(10, 2)
+  deposit     Decimal  @db.Decimal(10, 2)
+  mealFee     Decimal  @db.Decimal(10, 2) @default(0)
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model Charge {
+  id          String          @id @default(cuid())
+  residentId  String
+  resident    ResidentProfile @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  type        ChargeType
+  description String
+  amount      Decimal         @db.Decimal(10, 2)
+  dueDate     DateTime?
+  createdAt   DateTime        @default(now())
+  createdById String?
+}
+
+model Payment {
+  id          String          @id @default(cuid())
+  residentId  String
+  resident    ResidentProfile @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  amount      Decimal         @db.Decimal(10, 2)
+  method      String          @default("PORTAL")
+  reference   String?
+  note        String?
+  paidAt      DateTime        @default(now())
+  createdById String?
+}
+
+model MealPlan {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  residents   ResidentProfile[]
+}
+
+model MaintenanceRequest {
+  id          String              @id @default(cuid())
+  residentId  String
+  resident    ResidentProfile     @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  roomId      String?
+  room        Room?               @relation(fields: [roomId], references: [id])
+  category    MaintenanceCategory @default(OTHER)
+  title       String
+  description String
+  status      MaintenanceStatus   @default(OPEN)
+  staffNotes  String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  resolvedAt  DateTime?
+}
+
+model Announcement {
+  id        String                @id @default(cuid())
+  title     String
+  body      String
+  audience  AnnouncementAudience  @default(ALL)
+  published Boolean               @default(true)
+  publishAt DateTime              @default(now())
+  expiresAt DateTime?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+}
